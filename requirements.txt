@@ -1,0 +1,24 @@
+# 이 의존성은 Playwright 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+playwright==1.54.0
+# 이 의존성은 python-dotenv 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+python-dotenv==1.1.1
+# 이 의존성은 pandas 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+pandas==2.3.1
+# 이 의존성은 Streamlit 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+streamlit==1.47.1
+# 이 의존성은 requests 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+requests==2.32.4
+# 이 의존성은 Appium-Python-Client 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+Appium-Python-Client==5.1.1
+# 이 의존성은 Pillow 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+Pillow==11.3.0
+# 이 의존성은 pytesseract 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+pytesseract==0.3.13
+# 이 의존성은 Redis 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+redis==5.0.8
+# 이 의존성은 psycopg 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+psycopg[binary]>=3.2,<4.0
+# 이 의존성은 FastAPI 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+fastapi>=0.115,<1.0
+# 이 의존성은 uvicorn 기능을 실행하기 위해 설치되는 파이썬 패키지입니다.
+uvicorn[standard]>=0.30,<1.0

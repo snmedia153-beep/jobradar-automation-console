@@ -1,0 +1,193 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobradar-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jobradar}
+      POSTGRES_USER: ${POSTGRES_USER:-jobradar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jobradar} -d ${POSTGRES_DB:-jobradar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: jobradar-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  jobradar-init:
+    build: .
+    command: >
+      sh -lc "python -m jobradar.cli init-db &&
+              python -m jobradar.cli seed-defaults &&
+              python -m jobradar.cli slot-init --slots 5 &&
+              python -m jobradar.cli slot-ports &&
+              python -m jobradar.cli db-check &&
+              python -m jobradar.cli redis-check"
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment: &jobradar-env
+      PYTHONPATH: /app
+      OUTPUT_DIR: /app/output
+      DATABASE_URL: ${DATABASE_URL:-postgresql://jobradar:change_me@postgres:5432/jobradar}
+      DATABASE_BACKEND: postgres
+      EMULATOR_SLOTS: "${EMULATOR_SLOTS:-5}"
+      JOBRADAR_DOCKER_MODE: "true"
+      APPIUM_HOST: ${APPIUM_HOST:-host.docker.internal}
+      APPIUM_CONNECT_HOST: ${APPIUM_CONNECT_HOST:-host.docker.internal}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_QUEUE_ENABLED: "${REDIS_QUEUE_ENABLED:-true}"
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-jobradar}
+      REDIS_EVENTS_MAXLEN: "${REDIS_EVENTS_MAXLEN:-500}"
+      JOBRADAR_API_ENABLED: "false"
+      JOBRADAR_API_URL: http://jobradar-api:8000
+      WORKER_HEARTBEAT_SECONDS: "${WORKER_HEARTBEAT_SECONDS:-10}"
+      WORKER_STALE_AFTER_SECONDS: "${WORKER_STALE_AFTER_SECONDS:-180}"
+      WORKER_RETRY_DELAY_SECONDS: "${WORKER_RETRY_DELAY_SECONDS:-30}"
+      WORKER_AUTO_RETRY: "${WORKER_AUTO_RETRY:-true}"
+      SLOT_LOG_TAIL_LINES: "${SLOT_LOG_TAIL_LINES:-200}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - init
+
+  jobradar-api:
+    build: .
+    command: uvicorn jobradar.api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${JOBRADAR_API_PORT:-8000}:8000"
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      <<: *jobradar-env
+      JOBRADAR_API_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  jobradar-gui:
+    build: .
+    command: python -m streamlit run gui/streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+    ports:
+      - "${JOBRADAR_GUI_PORT:-8501}:8501"
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      <<: *jobradar-env
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      JOBRADAR_API_ENABLED: "true"
+      JOBRADAR_API_URL: http://jobradar-api:8000
+      JOBRADAR_GUI_URL: http://127.0.0.1:8501
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jobradar-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  jobradar-appium-worker:
+    build: .
+    command: python -m jobradar.cli appium-worker --max-jobs 5
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      <<: *jobradar-env
+      HEADLESS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - worker
+    restart: unless-stopped
+
+  jobradar-playwright-worker:
+    build: .
+    command: python -m jobradar.cli worker --type playwright --max-jobs 4
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      <<: *jobradar-env
+      HEADLESS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - worker
+    restart: unless-stopped
+
+  jobradar-crawler-once:
+    build: .
+    command: python -m jobradar.cli multi-crawl --seed
+    volumes:
+      - ./output:/app/output
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      <<: *jobradar-env
+      HEADLESS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - manual
+
+volumes:
+  postgres-data:
+  redis-data:

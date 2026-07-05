@@ -1,0 +1,43 @@
+# 쿠버네티스 리소스가 사용할 API 버전을 정합니다.
+apiVersion: apps/v1
+# 생성할 쿠버네티스 리소스 종류를 정합니다.
+kind: Deployment
+# 리소스 이름과 라벨 같은 기본 정보를 정합니다.
+metadata:
+  # 리소스나 컨테이너를 구분할 이름을 정합니다.
+  name: jobradar-worker
+# 리소스가 실제로 어떻게 동작할지 상세 설정을 정합니다.
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jobradar-worker
+  # 반복 생성될 파드의 기본 모양을 정의합니다.
+  template:
+    # 리소스 이름과 라벨 같은 기본 정보를 정합니다.
+    metadata:
+      labels:
+        app: jobradar-worker
+    # 리소스가 실제로 어떻게 동작할지 상세 설정을 정합니다.
+    spec:
+      # 파드 안에서 실행할 컨테이너 목록을 정의합니다.
+      containers:
+        - name: worker
+          image: jobradar:1.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "jobradar.cli", "worker", "--max-jobs", "4"]
+          env:
+            - name: HEADLESS
+              value: "true"
+            - name: EMULATOR_SLOTS
+              value: "4"
+            - name: MAX_ITEMS
+              value: "20"
+            - name: SCROLL_TIMES
+              value: "3"
+          volumeMounts:
+            - name: output
+              mountPath: /app/output
+      volumes:
+        - name: output
+          emptyDir: {}

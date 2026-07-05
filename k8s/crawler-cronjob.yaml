@@ -1,0 +1,42 @@
+# 쿠버네티스 리소스가 사용할 API 버전을 정합니다.
+apiVersion: batch/v1
+# 생성할 쿠버네티스 리소스 종류를 정합니다.
+kind: CronJob
+# 리소스 이름과 라벨 같은 기본 정보를 정합니다.
+metadata:
+  # 리소스나 컨테이너를 구분할 이름을 정합니다.
+  name: jobradar-automation-crawler
+# 리소스가 실제로 어떻게 동작할지 상세 설정을 정합니다.
+spec:
+  # 크론잡이 실행될 시간 규칙을 정합니다.
+  schedule: "0 9 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  # 크론잡이 만들 작업의 기본 내용을 정합니다.
+  jobTemplate:
+    # 리소스가 실제로 어떻게 동작할지 상세 설정을 정합니다.
+    spec:
+      backoffLimit: 2
+      # 반복 생성될 파드의 기본 모양을 정의합니다.
+      template:
+        # 리소스가 실제로 어떻게 동작할지 상세 설정을 정합니다.
+        spec:
+          restartPolicy: OnFailure
+          # 파드 안에서 실행할 컨테이너 목록을 정의합니다.
+          containers:
+            - name: crawler
+              image: jobradar:1.0
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "jobradar.cli", "multi-crawl", "--seed"]
+              env:
+                - name: HEADLESS
+                  value: "true"
+                - name: EMULATOR_SLOTS
+                  value: "4"
+                - name: MAX_ITEMS
+                  value: "50"
+                - name: SCROLL_TIMES
+                  value: "6"
+                - name: REQUEST_DELAY_MS
+                  value: "1200"
